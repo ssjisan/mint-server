@@ -13,6 +13,8 @@ const packageRoutes = require("./routers/packageRoutes.js");
 const requestConnectionRoutes = require("./routers/requestConnectionRoutes.js");
 const dashboardKpiRoutes = require("./routers/dashboardKpiRoutes.js");
 const clientRoutes = require("./routers/clientRoutes.js");
+const editorImage = require("./routers/editorImage.js");
+const successStoriesRoutes = require("./routers/successStoriesRoutes.js");
 dotenv.config();
 
 const storagePath = process.env.STORAGE_PATH || path.join(__dirname, "uploads");
@@ -39,7 +41,11 @@ app.use(packageRoutes);
 app.use(requestConnectionRoutes);
 app.use(dashboardKpiRoutes);
 app.use(clientRoutes);
-app.use("/file-storage", express.static(storagePath));
+app.use(editorImage);
+
+app.use(successStoriesRoutes);
+
+app.use("/mint-media-storage", express.static(storagePath));
 // 🔗 Root route
 // Basic Route
 app.get("/", (req, res) => {

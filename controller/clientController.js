@@ -20,7 +20,7 @@ const clientDataHandler = async (req, res) => {
     // Build public URL
     let imageUrl = null;
     if (req.file) {
-      imageUrl = `${baseUrl}/file-storage/${FOLDER}/${req.file.filename}`;
+      imageUrl = `${baseUrl}/mint-media-storage/${FOLDER}/${req.file.filename}`;
     }
 
     if (id) {
@@ -30,7 +30,7 @@ const clientDataHandler = async (req, res) => {
 
       // delete old image if new uploaded
       if (req.file && client.image?.url) {
-        const oldFile = client.image.url.split("/file-storage/")[1];
+        const oldFile = client.image.url.split("/mint-media-storage/")[1];
         const oldPath = path.join(storagePath, oldFile);
         if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath);
       }
@@ -92,7 +92,7 @@ const deleteClientById = async (req, res) => {
     // Delete image file from VPS/local storage
     if (client.image?.url) {
       const storagePath = process.env.STORAGE_PATH || "./uploads";
-      const filename = client.image.url.split("/file-storage/")[1];
+      const filename = client.image.url.split("/mint-media-storage/")[1];
       const filePath = path.join(storagePath, filename);
 
       if (fs.existsSync(filePath)) {

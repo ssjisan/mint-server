@@ -28,7 +28,7 @@ const createOrUpdateArea = async (req, res) => {
     // Build file URL if uploaded
     let imageUrl = null;
     if (file) {
-      imageUrl = `${baseUrl}/file-storage/${FOLDER}/${file.filename}`;
+      imageUrl = `${baseUrl}/mint-media-storage/${FOLDER}/${file.filename}`;
     }
 
     if (id) {

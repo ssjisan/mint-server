@@ -2,18 +2,19 @@ const multer = require("multer");
 const path = require("path");
 const fs = require("fs");
 
-const BASE_STORAGE = process.env.STORAGE_PATH || "./uploads";
+const BASE_STORAGE =
+  process.env.STORAGE_PATH || path.join(process.cwd(), "uploads");
 
 const createUploader = (subFolder = "") => {
-  const finalPath = path.join(BASE_STORAGE, subFolder);
-
-  // ensure folder exists
-  if (!fs.existsSync(finalPath)) {
-    fs.mkdirSync(finalPath, { recursive: true });
-  }
-
   const storage = multer.diskStorage({
     destination: (req, file, cb) => {
+      const finalPath = path.join(BASE_STORAGE, subFolder);
+
+      // ensure folder exists per request
+      if (!fs.existsSync(finalPath)) {
+        fs.mkdirSync(finalPath, { recursive: true });
+      }
+
       cb(null, finalPath);
     },
     filename: (req, file, cb) => {
