@@ -17,8 +17,8 @@ const editorImage = require("./routers/editorImage.js");
 const successStoriesRoutes = require("./routers/successStoriesRoutes.js");
 dotenv.config();
 
-const storagePath = process.env.STORAGE_PATH || path.join(__dirname, "uploads");
-
+const baseStoragePath =
+  process.env.STORAGE_PATH || path.join(process.cwd(), "uploads");
 const app = express();
 const port = process.env.PORT || 5001;
 
@@ -45,7 +45,7 @@ app.use(editorImage);
 
 app.use(successStoriesRoutes);
 
-app.use("/mint-media-storage", express.static(storagePath));
+app.use("/mint-media-storage", express.static(baseStoragePath));
 // 🔗 Root route
 // Basic Route
 app.get("/", (req, res) => {

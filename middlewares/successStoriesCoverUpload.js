@@ -2,13 +2,13 @@ const multer = require("multer");
 const path = require("path");
 const fs = require("fs");
 
-const coverPath = path.join(
-  process.cwd(),
-  "uploads",
-  "success-stories",
-  "cover-photos",
-);
+// Use STORAGE_PATH from .env
+const BASE_STORAGE =
+  process.env.STORAGE_PATH || path.join(process.cwd(), "uploads");
 
+const coverPath = path.join(BASE_STORAGE, "success-stories", "cover-photos");
+
+// Ensure folder exists
 if (!fs.existsSync(coverPath)) {
   fs.mkdirSync(coverPath, { recursive: true });
 }

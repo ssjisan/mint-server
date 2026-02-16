@@ -15,8 +15,10 @@ exports.createNews = async (req, res) => {
       return res.status(400).json({ message: "All fields are required" });
     }
 
-    const baseStoragePath = path.join(process.cwd(), "uploads");
+    const baseStoragePath =
+      process.env.STORAGE_PATH || path.join(process.cwd(), "uploads");
     const newsBaseFolder = path.join(baseStoragePath, "success-stories");
+    const coverFolder = path.join(newsBaseFolder, "cover-photos");
     const tempFolder = path.join(baseStoragePath, "temp");
 
     // ✅ Handle Cover Photo (Saved directly by multer)
@@ -41,7 +43,9 @@ exports.createNews = async (req, res) => {
     if (!fs.existsSync(newsFolder)) {
       fs.mkdirSync(newsFolder, { recursive: true });
     }
-
+    if (!fs.existsSync(coverFolder)) {
+      fs.mkdirSync(coverFolder, { recursive: true });
+    }
     const imageUrls = extractImagePaths(contentHTML);
     let updatedHTML = contentHTML;
     let updatedJSON = JSON.parse(JSON.stringify(contentJSON));
@@ -166,7 +170,9 @@ exports.updateNews = async (req, res) => {
     }
 
     const newsId = existingNews._id.toString();
-    const baseStoragePath = path.join(process.cwd(), "uploads");
+    const baseStoragePath =
+      process.env.STORAGE_PATH || path.join(process.cwd(), "uploads");
+
     const tempFolder = path.join(baseStoragePath, "temp");
     const newsFolder = path.join(baseStoragePath, "success-stories", newsId);
     const coverFolder = path.join(
@@ -277,7 +283,9 @@ exports.deleteNews = async (req, res) => {
 
     const newsId = existingNews._id.toString();
 
-    const baseStoragePath = path.join(process.cwd(), "uploads");
+    const baseStoragePath =
+      process.env.STORAGE_PATH || path.join(process.cwd(), "uploads");
+
     const newsFolder = path.join(baseStoragePath, "success-stories", newsId);
     const coverFolder = path.join(
       baseStoragePath,
