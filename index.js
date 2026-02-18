@@ -13,6 +13,7 @@ const packageRoutes = require("./routers/packageRoutes.js");
 const requestConnectionRoutes = require("./routers/requestConnectionRoutes.js");
 const dashboardKpiRoutes = require("./routers/dashboardKpiRoutes.js");
 const clientRoutes = require("./routers/clientRoutes.js");
+const brandRoutes = require("./routers/brandRoutes.js");
 const editorImage = require("./routers/editorImage.js");
 const successStoriesRoutes = require("./routers/successStoriesRoutes.js");
 dotenv.config();
@@ -41,6 +42,8 @@ app.use(packageRoutes);
 app.use(requestConnectionRoutes);
 app.use(dashboardKpiRoutes);
 app.use(clientRoutes);
+app.use(brandRoutes);
+
 app.use(editorImage);
 
 app.use(successStoriesRoutes);

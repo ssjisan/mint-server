@@ -137,6 +137,20 @@ exports.getAllNews = async (req, res) => {
   }
 };
 
+exports.getLatestSuccessStories = async (req, res) => {
+  try {
+    const latestNews = await News.find()
+      .sort({ createdAt: -1 }) // newest first
+      .limit(5) // only latest 5
+      .select("-contentJSON"); // optional: exclude heavy JSON
+
+    return res.status(200).json(latestNews);
+  } catch (error) {
+    console.error("Get Latest News Error:", error);
+    return res.status(500).json({ message: "Server error" });
+  }
+};
+
 exports.getNewsById = async (req, res) => {
   try {
     const { id } = req.params;

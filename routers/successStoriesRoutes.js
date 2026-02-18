@@ -7,6 +7,7 @@ const {
   getNewsById,
   updateNews,
   deleteNews,
+  getLatestSuccessStories,
 } = require("../controller/SuccessStoriesController.js");
 const { requiredSignIn } = require("../middlewares/authMiddleware.js");
 const newsCoverUpload = require("../middlewares/successStoriesCoverUpload.js");
@@ -18,6 +19,7 @@ router.post(
   createNews,
 );
 router.get("/all-news", getAllNews);
+router.get("/latest-success-stories", getLatestSuccessStories);
 router.get("/news/:id", getNewsById);
 router.put(
   "/update-news/:id",
