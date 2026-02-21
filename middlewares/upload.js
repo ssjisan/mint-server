@@ -26,7 +26,7 @@ const createUploader = (subFolder = "") => {
 
   return multer({
     storage,
-    limits: { fileSize: 100 * 1024 * 1024 }, // 100MB
+    limits: { fileSize: 2 * 1024 * 1024 },
   });
 };
 

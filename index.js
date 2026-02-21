@@ -14,8 +14,11 @@ const requestConnectionRoutes = require("./routers/requestConnectionRoutes.js");
 const dashboardKpiRoutes = require("./routers/dashboardKpiRoutes.js");
 const clientRoutes = require("./routers/clientRoutes.js");
 const brandRoutes = require("./routers/brandRoutes.js");
+const categoryRoutes = require("./routers/categoryRoutes.js");
 const editorImage = require("./routers/editorImage.js");
 const successStoriesRoutes = require("./routers/successStoriesRoutes.js");
+const productRoutes = require("./routers/productRoutes.js");
+
 dotenv.config();
 
 const baseStoragePath =
@@ -43,8 +46,9 @@ app.use(requestConnectionRoutes);
 app.use(dashboardKpiRoutes);
 app.use(clientRoutes);
 app.use(brandRoutes);
-
+app.use(categoryRoutes);
 app.use(editorImage);
+app.use(productRoutes);
 
 app.use(successStoriesRoutes);
 
