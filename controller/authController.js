@@ -56,41 +56,70 @@ const registerUser = async (req, res) => {
 const loginUser = async (req, res) => {
   try {
     const { email, password } = req.body;
-    if (!email) {
-      return res.json({ error: "Email is required" });
-    }
-    if (!password || password.length < 6) {
-      return res.json({ error: "Password should be longer than 6 characters" });
+    if (!email || !password) {
+      return res.status(400).json({
+        success: false,
+        message: "Email and password are required",
+      });
     }
 
-    const user = await UserModel.findOne({ email });
+    if (password.length < 6) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid email or password",
+      });
+    }
+    const normalizedEmail = email.toLowerCase().trim();
+    const user = await UserModel.findOne({ email: normalizedEmail });
     if (!user) {
-      return res.json({ error: "User Not Found" });
+      return res.status(401).json({
+        success: false,
+        message: "Invalid email or password",
+      });
     }
 
-    const match = await comparePassword(password, user.password);
-    if (!match) {
-      return res.json({ error: "Password wrong" });
+    // 5️⃣ Compare password
+    const isMatch = await comparePassword(password, user.password);
+
+    if (!isMatch) {
+      return res.status(401).json({
+        success: false,
+        message: "Invalid email or password",
+      });
     }
 
-    const token = jwt.sign({ _id: user._id }, process.env.JWT_SECURE, {
-      expiresIn: "7d",
-    });
+    // 6️⃣ Create JWT (12h expiry)
+    const token = jwt.sign(
+      {
+        _id: user._id,
+        role: user.role,
+      },
+      process.env.JWT_SECURE,
+      {
+        expiresIn: "12H",
+      },
+    );
 
-    res.json({
+    // 7️⃣ Send response
+    return res.status(200).json({
+      success: true,
+      message: "Login successful",
       user: {
+        id: user._id,
         name: user.name,
         email: user.email,
         role: user.role,
       },
       token,
     });
-  } catch (err) {
-    console.log(err);
-    res.status(500).json({ error: "Internal server error" });
+  } catch (error) {
+    console.error("Login error:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error",
+    });
   }
 };
-
 const userList = async (req, res) => {
   try {
     const user = await UserModel.find({});
@@ -162,7 +191,7 @@ const resetPassword = async (req, res) => {
     const updatedUser = await UserModel.findByIdAndUpdate(
       userId,
       { password: hashedPassword },
-      { new: true }
+      { new: true },
     );
 
     if (!updatedUser) {

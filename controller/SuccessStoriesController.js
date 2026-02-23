@@ -87,11 +87,24 @@ exports.createNews = async (req, res) => {
 
     // 5️⃣ Cleanup unused temp uploads
     for (const file of uploadedImages) {
+      // 🛑 Basic filename validation
+      if (!file || file.includes("/") || file.includes("..")) {
+        console.warn("Skipped invalid filename:", file);
+        continue;
+      }
+
       if (!movedFiles.includes(file)) {
         const filePath = path.join(tempFolder, file);
+
         if (fs.existsSync(filePath)) {
-          fs.unlinkSync(filePath);
-          console.log(`CLEANED TEMP: ${file}`);
+          const stat = fs.lstatSync(filePath);
+
+          if (stat.isFile()) {
+            fs.unlinkSync(filePath);
+            console.log(`CLEANED TEMP: ${file}`);
+          } else {
+            console.warn(`Skipped non-file during cleanup: ${filePath}`);
+          }
         }
       }
     }
@@ -247,9 +260,25 @@ exports.updateNews = async (req, res) => {
 
     // 🔹 4. Cleanup unused temp uploads
     for (const file of uploadedImages) {
+      // 🛑 Basic filename validation
+      if (!file || file.includes("/") || file.includes("..")) {
+        console.warn("Skipped invalid filename:", file);
+        continue;
+      }
+
       if (!movedFiles.includes(file)) {
         const filePath = path.join(tempFolder, file);
-        if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+
+        if (fs.existsSync(filePath)) {
+          const stat = fs.lstatSync(filePath);
+
+          if (stat.isFile()) {
+            fs.unlinkSync(filePath);
+            console.log(`CLEANED TEMP: ${file}`);
+          } else {
+            console.warn(`Skipped non-file during cleanup: ${filePath}`);
+          }
+        }
       }
     }
 

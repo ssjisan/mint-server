@@ -13,15 +13,15 @@ const {
 } = require("../controller/authController.js");
 
 // import middleware
-const { requiredSignIn, isAdmin } = require("../middlewares/authMiddleware.js");
+const { requiredSignIn } = require("../middlewares/authMiddleware.js");
 
 router.post("/register", registerUser);
 router.post("/login", loginUser);
 router.get("/users", requiredSignIn, userList);
-router.delete("/user/:userId", requiredSignIn, isAdmin, removeUser);
-router.get("/private", requiredSignIn, isAdmin, privateRoute);
+router.delete("/user/:userId", requiredSignIn, removeUser);
+router.get("/private", requiredSignIn, privateRoute);
 router.post("/change-password", requiredSignIn, changePassword);
-router.post("/reset-password/:userId", requiredSignIn, isAdmin, resetPassword);
+router.post("/reset-password/:userId", requiredSignIn, resetPassword);
 
 router.get("/auth-check", requiredSignIn, (req, res) => {
   res.json({ ok: true });
