@@ -11,7 +11,12 @@ const {
 // Memory storage for image uploads
 const upload = require("../middlewares/upload.js");
 
-router.post("/product-setup", requiredSignIn, productDataHandler);
+router.post(
+  "/product-setup",
+  requiredSignIn,
+  upload("products").array("productImages", 5),
+  productDataHandler,
+);
 router.get("/products", getAllProducts);
 router.get("/products/:id", getSingleProduct);
 router.delete("/products/:id", requiredSignIn, deleteProduct);

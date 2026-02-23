@@ -35,6 +35,16 @@ const productSchema = new mongoose.Schema(
       index: true,
     },
 
+    shortDescriptionJSON: {
+      type: Array,
+      required: true,
+    },
+
+    shortDescriptionHTML: {
+      type: String,
+      required: true,
+    },
+
     descriptionJSON: {
       type: Array,
       required: true,

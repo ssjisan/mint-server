@@ -56,199 +56,165 @@ const extractProductImageFilenames = (html, slug) => {
 // ===============================
 const productDataHandler = async (req, res) => {
   try {
-    const {
-      id,
-      name,
-      brand,
-      category,
-      descriptionJSON,
-      descriptionHTML,
-      isPublished,
-      price,
-      showPrice,
-      discount,
-      specifications,
-    } = req.body;
+    // 1. Convert FormData strings back to proper types
+    const data = { ...req.body };
 
-    // ================= VALIDATION =================
-    if (!name || !brand || !category || !descriptionJSON || !descriptionHTML) {
-      return res.status(400).json({
-        error: "Name, brand, category and description are required",
-      });
-    }
+    if (data.price) data.price = Number(data.price);
+    if (data.isPublished) data.isPublished = data.isPublished === "true";
+    if (data.showPrice) data.showPrice = data.showPrice === "true";
 
-    if (price === undefined || price < 0) {
-      return res.status(400).json({ error: "Valid price required" });
-    }
+    // Parse JSON strings back to Arrays/Objects
+    const parseIfString = (val) =>
+      typeof val === "string" ? JSON.parse(val) : val;
 
+    const descriptionJSON = parseIfString(data.descriptionJSON);
+    const shortDescriptionJSON = parseIfString(data.shortDescriptionJSON);
+    const specifications = parseIfString(data.specifications);
+    const discount = parseIfString(data.discount);
+    const imageMetadata = parseIfString(data.imageMetadata);
+
+    const { id, name, brand, category, descriptionHTML, shortDescriptionHTML } =
+      data;
+
+    // 2. Standard Validations
     if (
-      !mongoose.Types.ObjectId.isValid(brand) ||
-      !mongoose.Types.ObjectId.isValid(category)
+      !name ||
+      !brand ||
+      !category ||
+      !descriptionHTML ||
+      !shortDescriptionHTML
     ) {
-      return res.status(400).json({ error: "Invalid brand or category ID" });
+      return res.status(400).json({ error: "Required fields are missing" });
     }
 
-    // ================= SLUG =================
+    // 3. Paths & Folder Setup
     const slug = slugify(name, { lower: true, strict: true });
-
-    // ================= SAFE JSON PARSE =================
-    let parsedJSON;
-    try {
-      parsedJSON =
-        typeof descriptionJSON === "string"
-          ? JSON.parse(descriptionJSON)
-          : descriptionJSON;
-    } catch {
-      return res.status(400).json({ error: "Invalid description JSON" });
-    }
-
-    // ================= CLEAN SPECIFICATIONS =================
-    let cleanSpecifications = [];
-
-    if (Array.isArray(specifications)) {
-      cleanSpecifications = specifications
-        .filter(
-          (group) => group.groupTitle && group.items && group.items.length > 0,
-        )
-        .map((group) => ({
-          groupTitle: group.groupTitle.trim(),
-          items: group.items
-            .filter((item) => item.label && item.value)
-            .map((item) => ({
-              label: item.label.trim(),
-              value: item.value.trim(),
-            })),
-        }));
-    }
-
-    // ================= EDITOR IMAGE HANDLING =================
     const baseStoragePath =
       process.env.STORAGE_PATH || path.join(process.cwd(), "uploads");
-
+    const productFolder = path.join(baseStoragePath, "products", slug);
+    const thumbnailFolder = path.join(productFolder, "thumbnails");
     const tempFolder = path.join(baseStoragePath, "temp");
-    const productBaseFolder = path.join(baseStoragePath, "products");
-    const productFolder = path.join(productBaseFolder, slug);
 
-    if (!fs.existsSync(productFolder)) {
-      fs.mkdirSync(productFolder, { recursive: true });
+    if (!fs.existsSync(thumbnailFolder)) {
+      fs.mkdirSync(thumbnailFolder, { recursive: true });
     }
 
-    let updatedHTML = descriptionHTML;
-    let updatedJSON = parsedJSON;
+    // 4. Handle Gallery Thumbnails (req.files)
+    const newFiles = req.files || [];
+    let finalProductImages = [];
+    let fileCounter = 0;
 
-    const imageUrls = extractImagePaths(descriptionHTML);
-    const movedFiles = [];
+    // Map metadata to the actual files uploaded
+    if (imageMetadata) {
+      imageMetadata.forEach((meta) => {
+        if (meta.isNew) {
+          const file = newFiles[fileCounter];
+          if (file) {
+            const ext = path.extname(file.originalname);
+            const filename = `thumb-${Date.now()}-${fileCounter}${ext}`;
+            const targetPath = path.join(thumbnailFolder, filename);
 
-    for (const url of imageUrls) {
-      if (url.includes("/temp/")) {
-        const filename = path.basename(url);
+            fs.renameSync(file.path, targetPath);
 
-        const oldPath = path.join(tempFolder, filename);
-        const newPath = path.join(productFolder, filename);
-
-        if (fs.existsSync(oldPath)) {
-          fs.renameSync(oldPath, newPath);
-          movedFiles.push(filename);
+            finalProductImages.push({
+              url: `${process.env.BASE_URL}/mint-media-storage/products/${slug}/thumbnails/${filename}`,
+              alt: name,
+              isPrimary: meta.isPrimary || false,
+            });
+            fileCounter++;
+          }
+        } else {
+          // Keep existing image
+          finalProductImages.push(meta);
         }
-
-        const newUrl = `${process.env.BASE_URL}/mint-media-storage/products/${slug}/${filename}`;
-        updatedHTML = updatedHTML.split(url).join(newUrl);
-      }
-    }
-
-    const updateJsonImages = (nodes) => {
-      for (let node of nodes) {
-        if (node.type === "image" && node.url?.includes("/temp/")) {
-          const filename = path.basename(node.url);
-
-          node.url = `${process.env.BASE_URL}/mint-media-storage/products/${slug}/${filename}`;
-        }
-
-        if (node.children) updateJsonImages(node.children);
-      }
-    };
-
-    updateJsonImages(updatedJSON);
-
-    // ================= UPDATE =================
-    if (id) {
-      if (!mongoose.Types.ObjectId.isValid(id)) {
-        return res.status(400).json({ error: "Invalid product ID" });
-      }
-
-      const product = await Product.findById(id);
-      if (!product) return res.status(404).json({ error: "Product not found" });
-      const oldSlug = product.slug;
-      const oldFolder = path.join(productBaseFolder, oldSlug);
-
-      // 🔥 STEP 1: Get old image filenames from DB
-      const oldImages = extractProductImageFilenames(
-        product.descriptionHTML,
-        oldSlug,
-      );
-
-      // 🔥 STEP 2: Get new image filenames from updated HTML
-      const newImages = extractProductImageFilenames(updatedHTML, slug);
-
-      // 🔥 STEP 3: Find removed images
-      const removedImages = oldImages.filter(
-        (filename) => !newImages.includes(filename),
-      );
-
-      // 🔥 STEP 4: Delete removed files
-      for (const filename of removedImages) {
-        const filePath = path.join(oldFolder, filename);
-
-        if (fs.existsSync(filePath)) {
-          fs.unlinkSync(filePath);
-        }
-      }
-
-      product.name = name;
-      product.slug = slug;
-      product.brand = brand;
-      product.category = category;
-      product.descriptionJSON = updatedJSON;
-      product.descriptionHTML = updatedHTML;
-      product.isPublished = isPublished;
-      product.price = price;
-      product.showPrice = showPrice;
-      product.discount = discount;
-      product.specifications = cleanSpecifications;
-
-      await product.save();
-
-      return res.status(200).json({
-        message: "Product updated successfully",
-        product,
       });
     }
 
-    // ================= CREATE =================
-    const productCode = await generateProductCode();
+    // 5. Enforce Limit of 5
+    if (finalProductImages.length > 5) {
+      return res.status(400).json({ error: "Maximum 5 images allowed" });
+    }
 
-    const product = await Product.create({
-      name,
-      slug,
-      productCode,
-      brand,
-      category,
-      descriptionJSON: updatedJSON,
-      descriptionHTML: updatedHTML,
-      isPublished,
-      price,
-      showPrice,
-      discount,
-      specifications: cleanSpecifications,
+    // 6. Editor Image Handling (Moving from /temp to /{slug})
+    let updatedHTML = descriptionHTML;
+    let updatedShortHTML = shortDescriptionHTML;
+    const imageUrls = [
+      ...extractImagePaths(descriptionHTML),
+      ...extractImagePaths(shortDescriptionHTML),
+    ];
+
+    imageUrls.forEach((url) => {
+      if (url.includes("/temp/")) {
+        const filename = path.basename(url);
+        if (fs.existsSync(path.join(tempFolder, filename))) {
+          fs.renameSync(
+            path.join(tempFolder, filename),
+            path.join(productFolder, filename),
+          );
+          const newUrl = `${process.env.BASE_URL}/mint-media-storage/products/${slug}/${filename}`;
+          updatedHTML = updatedHTML.split(url).join(newUrl);
+          updatedShortHTML = updatedShortHTML.split(url).join(newUrl);
+        }
+      }
     });
 
-    res.status(201).json({
-      message: "Product created successfully",
-      product,
-    });
+    // 7. Save to Database
+    let product;
+    if (id) {
+      product = await Product.findById(id);
+      if (!product) return res.status(404).json({ error: "Product not found" });
+
+      // Logic to delete removed files from VPS disk
+      (product.images || []).forEach((oldImg) => {
+        if (!finalProductImages.some((n) => n.url === oldImg.url)) {
+          const oldFile = path.join(thumbnailFolder, path.basename(oldImg.url));
+          if (fs.existsSync(oldFile)) fs.unlinkSync(oldFile);
+        }
+      });
+
+      Object.assign(product, {
+        name,
+        slug,
+        brand,
+        category,
+        price: data.price,
+        isPublished: data.isPublished,
+        showPrice: data.showPrice,
+        discount,
+        specifications,
+        descriptionHTML: updatedHTML,
+        descriptionJSON,
+        shortDescriptionHTML: updatedShortHTML,
+        shortDescriptionJSON,
+        images: finalProductImages,
+      });
+    } else {
+      product = new Product({
+        name,
+        slug,
+        productCode: await generateProductCode(),
+        brand,
+        category,
+        price: data.price,
+        isPublished: data.isPublished,
+        showPrice: data.showPrice,
+        discount,
+        specifications,
+        descriptionHTML: updatedHTML,
+        descriptionJSON,
+        shortDescriptionHTML: updatedShortHTML,
+        shortDescriptionJSON,
+        images: finalProductImages,
+      });
+    }
+
+    await product.save();
+    res
+      .status(id ? 200 : 201)
+      .json({ message: "Product saved successfully", product });
   } catch (error) {
-    console.error("Product save failed:", error);
-    res.status(500).json({ error: "Server error" });
+    console.error("Save Error:", error);
+    res.status(500).json({ error: "Internal Server Error" });
   }
 };
 
