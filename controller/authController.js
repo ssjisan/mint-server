@@ -71,8 +71,6 @@ const registerUserByAdmin = async (req, res) => {
 const loginUser = async (req, res) => {
   try {
     const { email, password } = req.body;
-    // 🔐 Create JWT (12 hours)
-
     if (!email || !password) {
       return res.status(400).json({
         success: false,
@@ -110,9 +108,18 @@ const loginUser = async (req, res) => {
 
     // 🔒 Check if account is locked
     if (user.lockUntil && user.lockUntil > Date.now()) {
+      const remainingMs = user.lockUntil - Date.now();
+
+      const remainingMinutes = Math.floor(remainingMs / 60000);
+      const remainingSeconds = Math.floor((remainingMs % 60000) / 1000);
+
       return res.status(423).json({
         success: false,
-        message: "Account temporarily locked. Try later.",
+        message: "Account temporarily locked",
+        remainingTime: {
+          minutes: remainingMinutes,
+          seconds: remainingSeconds,
+        },
       });
     }
 
@@ -124,8 +131,8 @@ const loginUser = async (req, res) => {
       user.loginAttempts += 1;
 
       // Lock after 5 failed attempts (example)
-      if (user.loginAttempts >= 5) {
-        user.lockUntil = Date.now() + 15 * 60 * 1000; // 15 minutes lock
+      if (user.loginAttempts >= 3) {
+        user.lockUntil = Date.now() + 5 * 60 * 1000; // 15 minutes lock
         user.loginAttempts = 0;
       }
 
