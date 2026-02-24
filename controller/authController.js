@@ -13,38 +13,53 @@ const registerUserByAdmin = async (req, res) => {
   try {
     const { name, email, role } = req.body;
 
+    // Validation
     if (!name || !name.trim()) {
-      return res.status(400).json({ error: "Name is required" });
+      return res.status(400).json({
+        success: false,
+        message: "Name is required",
+      });
     }
 
     if (!email) {
-      return res.status(400).json({ error: "Email is required" });
+      return res.status(400).json({
+        success: false,
+        message: "Email is required",
+      });
     }
 
     if (role === undefined) {
-      return res.status(400).json({ error: "Role is required" });
+      return res.status(400).json({
+        success: false,
+        message: "Role is required",
+      });
     }
 
     const normalizedEmail = email.toLowerCase().trim();
 
+    // Check duplicate
     const existingUser = await UserModel.findOne({
       email: normalizedEmail,
     });
 
     if (existingUser) {
-      return res.status(400).json({ error: "Email is already taken" });
+      return res.status(400).json({
+        success: false,
+        message: "Email is already taken",
+      });
     }
-    const hashedPassword = await hashPassword("12345678");
 
-    const newUser = new UserModel({
+    // Default password
+    const defaultPassword = "12345678";
+    const hashedPassword = await hashPassword(defaultPassword);
+
+    const newUser = await UserModel.create({
       name: name.trim(),
       email: normalizedEmail,
       password: hashedPassword,
       role,
       mustChangePassword: true,
     });
-
-    await newUser.save(); // pre("save") will hash automatically
 
     return res.status(201).json({
       success: true,
@@ -57,9 +72,10 @@ const registerUserByAdmin = async (req, res) => {
       },
     });
   } catch (err) {
-    console.error(err);
+    console.error("Register Error:", err);
     return res.status(500).json({
-      error: "Internal server error",
+      success: false,
+      message: "Internal server error",
     });
   }
 };
@@ -71,6 +87,7 @@ const registerUserByAdmin = async (req, res) => {
 const loginUser = async (req, res) => {
   try {
     const { email, password } = req.body;
+
     if (!email || !password) {
       return res.status(400).json({
         success: false,
@@ -81,16 +98,7 @@ const loginUser = async (req, res) => {
     const normalizedEmail = email.toLowerCase().trim();
 
     const user = await UserModel.findOne({ email: normalizedEmail });
-    const token = jwt.sign(
-      {
-        _id: user._id,
-        role: user.role,
-      },
-      process.env.JWT_SECURE,
-      {
-        expiresIn: "12h",
-      },
-    );
+
     if (!user) {
       return res.status(401).json({
         success: false,
@@ -111,15 +119,12 @@ const loginUser = async (req, res) => {
       const remainingMs = user.lockUntil - Date.now();
 
       const remainingMinutes = Math.floor(remainingMs / 60000);
-      const remainingSeconds = Math.floor((remainingMs % 60000) / 1000);
+      const remainingSeconds = Math.ceil(remainingMs / 1000);
 
       return res.status(423).json({
         success: false,
         message: "Account temporarily locked",
-        remainingTime: {
-          minutes: remainingMinutes,
-          seconds: remainingSeconds,
-        },
+        remainingSeconds,
       });
     }
 
@@ -148,9 +153,21 @@ const loginUser = async (req, res) => {
     user.loginAttempts = 0;
     user.lockUntil = null;
 
+    const token = jwt.sign(
+      {
+        _id: user._id,
+        role: user.role,
+      },
+      process.env.JWT_SECURE,
+      {
+        expiresIn: "12h",
+      },
+    );
+
     // 🔁 Force password change check
     if (user.mustChangePassword) {
       await user.save();
+      console.log("this block comes");
 
       return res.status(403).json({
         success: false,
@@ -192,6 +209,10 @@ const loginUser = async (req, res) => {
   }
 };
 
+// ---------------------------
+// Change Password Controller
+// ---------------------------
+
 const changePassword = async (req, res) => {
   try {
     const userId = req.user._id;
@@ -204,10 +225,42 @@ const changePassword = async (req, res) => {
       });
     }
 
-    if (newPassword.length < 8) {
+    // 🔐 Password Policy Validation
+
+    if (newPassword.length < 8 || newPassword.length > 16) {
       return res.status(400).json({
         success: false,
-        message: "Password must be at least 8 characters",
+        message: "Password must be between 8 and 16 characters",
+      });
+    }
+
+    // At least 1 uppercase, 1 number, 1 special character
+    const passwordRegex =
+      /^(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&^#()[\]{}\-_=+|:;"'<>,./~`]).{8,16}$/;
+
+    if (!passwordRegex.test(newPassword)) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "Password must contain at least 1 uppercase letter, 1 number, and 1 special character",
+      });
+    }
+
+    // ❌ Block common weak passwords
+    const weakPasswords = [
+      "12345678",
+      "123456789",
+      "password",
+      "password123",
+      "admin123",
+      "qwerty123",
+    ];
+
+    if (weakPasswords.includes(newPassword.toLowerCase())) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "This password is too common. Please choose a stronger password.",
       });
     }
 
@@ -239,17 +292,34 @@ const changePassword = async (req, res) => {
       });
     }
 
-    // ❌ Cannot use name or email
+    // ❌ Cannot use name or email fragments
     const lowerNewPass = newPassword.toLowerCase();
 
-    if (
-      lowerNewPass.includes(user.name.toLowerCase()) ||
-      lowerNewPass.includes(user.email.toLowerCase())
-    ) {
-      return res.status(400).json({
-        success: false,
-        message: "Password cannot contain your name or email",
-      });
+    // 1️⃣ Split name into parts
+    const nameParts = user.name
+      .toLowerCase()
+      .split(/\s+/)
+      .filter((part) => part.length >= 3); // ignore very small words
+
+    // 2️⃣ Extract email username (before @)
+    const emailUsername = user.email.toLowerCase().split("@")[0];
+
+    // Also split email username by dots or underscores
+    const emailParts = emailUsername
+      .split(/[._-]/)
+      .filter((part) => part.length >= 3);
+
+    // Combine all restricted keywords
+    const restrictedWords = [...nameParts, emailUsername, ...emailParts];
+
+    // 3️⃣ Check if password contains any restricted word
+    for (let word of restrictedWords) {
+      if (lowerNewPass.includes(word)) {
+        return res.status(400).json({
+          success: false,
+          message: "Password cannot contain parts of your name or email",
+        });
+      }
     }
 
     // 🔒 Prevent reuse of last 3 passwords
@@ -293,6 +363,11 @@ const changePassword = async (req, res) => {
     });
   }
 };
+
+// ---------------------------
+// Get All User List
+// ---------------------------
+
 const userList = async (req, res) => {
   try {
     const user = await UserModel.find({});
@@ -303,6 +378,10 @@ const userList = async (req, res) => {
   }
 };
 
+// ---------------------------
+// Remove User List
+// ---------------------------
+
 const removeUser = async (req, res) => {
   try {
     const user = await UserModel.findByIdAndDelete(req.params.userId);
@@ -312,18 +391,32 @@ const removeUser = async (req, res) => {
   }
 };
 
+// ---------------------------
+// Private Route
+// ---------------------------
+
 const privateRoute = async (req, res) => {
   res.json({ currentUser: req.user });
 };
 
+// ---------------------------
+// Reset Password
+// ---------------------------
+
 const resetPassword = async (req, res) => {
   try {
     const { userId } = req.params;
-    const hashedPassword = await hashPassword("123456");
+    const hashedPassword = await hashPassword("12345678");
 
     const updatedUser = await UserModel.findByIdAndUpdate(
       userId,
-      { password: hashedPassword },
+      {
+        password: hashedPassword,
+        mustChangePassword: true, // 🔥 force change on next login
+        passwordChangedAt: new Date(), // important for expiry logic
+        loginAttempts: 0, // reset attempts
+        lockUntil: null, // unlock account if locked
+      },
       { new: true },
     );
 
@@ -331,7 +424,7 @@ const resetPassword = async (req, res) => {
       return res.status(404).json({ error: "User not found" });
     }
 
-    res.json({ message: "Password has been reset to '123456'" });
+    res.json({ message: "Password has been reset to '12345678'" });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Something went wrong" });
