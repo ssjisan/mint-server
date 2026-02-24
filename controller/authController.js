@@ -5,57 +5,74 @@ const dotenv = require("dotenv");
 
 dotenv.config();
 
-const registerUser = async (req, res) => {
+// ---------------------------
+// User Registration Controller
+// ---------------------------
+
+const registerUserByAdmin = async (req, res) => {
   try {
-    const { name, email, password, role } = req.body;
-    if (!name.trim()) {
-      return res.json({ error: "Name is required" });
+    const { name, email, role } = req.body;
+
+    if (!name || !name.trim()) {
+      return res.status(400).json({ error: "Name is required" });
     }
+
     if (!email) {
-      return res.json({ error: "Email is required" });
+      return res.status(400).json({ error: "Email is required" });
     }
-    if (!password || password.length < 6) {
-      return res.json({ error: "Password should be longer than 6 characters" });
-    }
+
     if (role === undefined) {
-      return res.json({ error: "Role is required" });
+      return res.status(400).json({ error: "Role is required" });
     }
 
-    const existingUser = await UserModel.findOne({ email });
-    if (existingUser) {
-      return res.json({ error: "Email is already taken" });
-    }
+    const normalizedEmail = email.toLowerCase().trim();
 
-    const hashedPassword = await hashPassword(password);
-
-    const newUser = await new UserModel({
-      name,
-      email,
-      password: hashedPassword,
-      role,
-    }).save();
-
-    const token = jwt.sign({ _id: newUser._id }, process.env.JWT_SECURE, {
-      expiresIn: "7d",
+    const existingUser = await UserModel.findOne({
+      email: normalizedEmail,
     });
 
-    res.json({
-      newUser: {
+    if (existingUser) {
+      return res.status(400).json({ error: "Email is already taken" });
+    }
+    const hashedPassword = await hashPassword("12345678");
+
+    const newUser = new UserModel({
+      name: name.trim(),
+      email: normalizedEmail,
+      password: hashedPassword,
+      role,
+      mustChangePassword: true,
+    });
+
+    await newUser.save(); // pre("save") will hash automatically
+
+    return res.status(201).json({
+      success: true,
+      message: "User created successfully",
+      user: {
+        id: newUser._id,
         name: newUser.name,
         email: newUser.email,
         role: newUser.role,
       },
-      token,
     });
   } catch (err) {
-    console.log(err);
-    res.status(500).json({ error: "Internal server error" });
+    console.error(err);
+    return res.status(500).json({
+      error: "Internal server error",
+    });
   }
 };
+
+// ---------------------------
+// User Login Controller
+// ---------------------------
 
 const loginUser = async (req, res) => {
   try {
     const { email, password } = req.body;
+    // 🔐 Create JWT (12 hours)
+
     if (!email || !password) {
       return res.status(400).json({
         success: false,
@@ -63,32 +80,9 @@ const loginUser = async (req, res) => {
       });
     }
 
-    if (password.length < 6) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid email or password",
-      });
-    }
     const normalizedEmail = email.toLowerCase().trim();
+
     const user = await UserModel.findOne({ email: normalizedEmail });
-    if (!user) {
-      return res.status(401).json({
-        success: false,
-        message: "Invalid email or password",
-      });
-    }
-
-    // 5️⃣ Compare password
-    const isMatch = await comparePassword(password, user.password);
-
-    if (!isMatch) {
-      return res.status(401).json({
-        success: false,
-        message: "Invalid email or password",
-      });
-    }
-
-    // 6️⃣ Create JWT (12h expiry)
     const token = jwt.sign(
       {
         _id: user._id,
@@ -96,11 +90,81 @@ const loginUser = async (req, res) => {
       },
       process.env.JWT_SECURE,
       {
-        expiresIn: "12H",
+        expiresIn: "12h",
       },
     );
+    if (!user) {
+      return res.status(401).json({
+        success: false,
+        message: "Invalid email or password",
+      });
+    }
 
-    // 7️⃣ Send response
+    // 🔒 Check if account is active
+    if (!user.isActive) {
+      return res.status(403).json({
+        success: false,
+        message: "Account is deactivated",
+      });
+    }
+
+    // 🔒 Check if account is locked
+    if (user.lockUntil && user.lockUntil > Date.now()) {
+      return res.status(423).json({
+        success: false,
+        message: "Account temporarily locked. Try later.",
+      });
+    }
+
+    // 🔑 Compare password
+    const isMatch = await comparePassword(password, user.password);
+
+    if (!isMatch) {
+      // Increase login attempts
+      user.loginAttempts += 1;
+
+      // Lock after 5 failed attempts (example)
+      if (user.loginAttempts >= 5) {
+        user.lockUntil = Date.now() + 15 * 60 * 1000; // 15 minutes lock
+        user.loginAttempts = 0;
+      }
+
+      await user.save();
+
+      return res.status(401).json({
+        success: false,
+        message: "Invalid email or password",
+      });
+    }
+
+    // Reset login attempts on success
+    user.loginAttempts = 0;
+    user.lockUntil = null;
+
+    // 🔁 Force password change check
+    if (user.mustChangePassword) {
+      await user.save();
+
+      return res.status(403).json({
+        success: false,
+        message: "Password change required",
+        forcePasswordChange: true,
+        token,
+      });
+    }
+
+    // 🕒 Check password expiry (7 days rule)
+    const sevenDays = 7 * 24 * 60 * 60 * 1000;
+    if (Date.now() - user.passwordChangedAt > sevenDays) {
+      return res.status(403).json({
+        success: false,
+        message: "Password expired. Please change it.",
+        forcePasswordChange: true,
+      });
+    }
+
+    await user.save();
+
     return res.status(200).json({
       success: true,
       message: "Login successful",
@@ -117,6 +181,108 @@ const loginUser = async (req, res) => {
     return res.status(500).json({
       success: false,
       message: "Internal server error",
+    });
+  }
+};
+
+const changePassword = async (req, res) => {
+  try {
+    const userId = req.user._id;
+    const { currentPassword, newPassword } = req.body;
+
+    if (!currentPassword || !newPassword) {
+      return res.status(400).json({
+        success: false,
+        message: "Current and new password are required",
+      });
+    }
+
+    if (newPassword.length < 8) {
+      return res.status(400).json({
+        success: false,
+        message: "Password must be at least 8 characters",
+      });
+    }
+
+    const user = await UserModel.findById(userId);
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "User not found",
+      });
+    }
+
+    // Verify current password
+    const isMatch = await comparePassword(currentPassword, user.password);
+
+    if (!isMatch) {
+      return res.status(401).json({
+        success: false,
+        message: "Current password is incorrect",
+      });
+    }
+
+    // ❌ New password cannot be same as current
+    const sameAsCurrent = await comparePassword(newPassword, user.password);
+    if (sameAsCurrent) {
+      return res.status(400).json({
+        success: false,
+        message: "New password cannot be same as current password",
+      });
+    }
+
+    // ❌ Cannot use name or email
+    const lowerNewPass = newPassword.toLowerCase();
+
+    if (
+      lowerNewPass.includes(user.name.toLowerCase()) ||
+      lowerNewPass.includes(user.email.toLowerCase())
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: "Password cannot contain your name or email",
+      });
+    }
+
+    // 🔒 Prevent reuse of last 3 passwords
+    for (let oldHash of user.passwordHistory) {
+      const reused = await comparePassword(newPassword, oldHash);
+      if (reused) {
+        return res.status(400).json({
+          success: false,
+          message: "You cannot reuse last 3 passwords",
+        });
+      }
+    }
+
+    // Save current password to history
+    if (user.passwordHistory.length >= 3) {
+      user.passwordHistory.shift();
+    }
+
+    user.passwordHistory.push(user.password);
+
+    // Hash new password
+    const hashed = await hashPassword(newPassword);
+
+    user.password = hashed;
+    user.mustChangePassword = false;
+    user.passwordChangedAt = Date.now();
+    user.loginAttempts = 0;
+    user.lockUntil = null;
+
+    await user.save();
+
+    return res.json({
+      success: true,
+      message: "Password changed successfully",
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({
+      success: false,
+      message: "Server error",
     });
   }
 };
@@ -143,46 +309,6 @@ const privateRoute = async (req, res) => {
   res.json({ currentUser: req.user });
 };
 
-const changePassword = async (req, res) => {
-  try {
-    const { oldPassword, newPassword, confirmPassword } = req.body;
-    if (!oldPassword || !oldPassword.trim()) {
-      return res.status(400).json({ error: "Old password is required" });
-    }
-    if (!newPassword || !newPassword.trim()) {
-      return res.status(400).json({ error: "New password is required" });
-    }
-    if (!confirmPassword || !confirmPassword.trim()) {
-      return res.status(400).json({ error: "Confirm password is required" });
-    }
-    if (newPassword.length < 6) {
-      return res
-        .status(400)
-        .json({ error: "New password should be longer than 6 characters" });
-    }
-    if (newPassword !== confirmPassword) {
-      return res
-        .status(400)
-        .json({ error: "New password and confirm password do not match" });
-    }
-
-    const existingUser = await UserModel.findById(req.user._id);
-    const match = await comparePassword(oldPassword, existingUser.password);
-    if (!match) {
-      return res.status(400).json({ error: "Old password is incorrect" });
-    }
-
-    const hashedPassword = await hashPassword(newPassword);
-    existingUser.password = hashedPassword;
-    await existingUser.save();
-
-    res.json({ message: "Password changed successfully" });
-  } catch (err) {
-    console.log(err);
-    res.status(500).json({ error: "Something went wrong" });
-  }
-};
-
 const resetPassword = async (req, res) => {
   try {
     const { userId } = req.params;
@@ -206,7 +332,7 @@ const resetPassword = async (req, res) => {
 };
 
 module.exports = {
-  registerUser,
+  registerUserByAdmin,
   loginUser,
   userList,
   removeUser,

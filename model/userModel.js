@@ -1,37 +1,69 @@
 const mongoose = require("mongoose");
 
-const { Schema } = mongoose;
-
-const userSchema = new Schema(
+const UserSchema = new mongoose.Schema(
   {
     name: {
       type: String,
       required: true,
       trim: true,
+      minlength: 2,
+      maxlength: 50,
     },
+
     email: {
       type: String,
       required: true,
-      trim: true,
       unique: true,
+      trim: true,
+      lowercase: true,
+      match: /^\S+@\S+\.\S+$/,
     },
+
     password: {
       type: String,
       required: true,
-      min: 6,
-      max: 64,
+      minlength: 8,
     },
+
     role: {
       type: Number,
       required: true,
+      enum: [0, 1, 2],
+    },
+
+    mustChangePassword: {
+      type: Boolean,
+      default: true,
+    },
+
+    passwordChangedAt: {
+      type: Date,
+      default: Date.now,
+    },
+
+    passwordHistory: [
+      {
+        type: String,
+      },
+    ],
+
+    isActive: {
+      type: Boolean,
+      default: true,
+    },
+
+    loginAttempts: {
+      type: Number,
+      default: 0,
+    },
+
+    lockUntil: {
+      type: Date,
     },
   },
   {
     timestamps: true,
-  }
+  },
 );
 
-// Use existing model if already compiled to avoid overwrite error
-const UserModel = mongoose.models.User || mongoose.model("User", userSchema);
-
-module.exports = UserModel;
+module.exports = mongoose.model("User", UserSchema);

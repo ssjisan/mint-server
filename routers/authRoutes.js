@@ -3,7 +3,7 @@ const router = express.Router();
 
 // import controller
 const {
-  registerUser,
+  registerUserByAdmin,
   loginUser,
   privateRoute,
   removeUser,
@@ -15,7 +15,7 @@ const {
 // import middleware
 const { requiredSignIn } = require("../middlewares/authMiddleware.js");
 
-router.post("/register", registerUser);
+router.post("/register", requiredSignIn, registerUserByAdmin);
 router.post("/login", loginUser);
 router.get("/users", requiredSignIn, userList);
 router.delete("/user/:userId", requiredSignIn, removeUser);
