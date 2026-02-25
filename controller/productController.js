@@ -56,6 +56,8 @@ const extractProductImageFilenames = (html, slug) => {
 // ===============================
 const productDataHandler = async (req, res) => {
   try {
+    console.log("FILES:", req.files);
+    console.log("BODY:", req.body);
     // 1. Convert FormData strings back to proper types
     const data = { ...req.body };
 

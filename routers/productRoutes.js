@@ -15,6 +15,10 @@ router.post(
   "/product-setup",
   requiredSignIn,
   upload("products").array("productImages", 5),
+  (req, res, next) => {
+    console.log("After multer:", req.files);
+    next();
+  },
   productDataHandler,
 );
 router.get("/products", getAllProducts);

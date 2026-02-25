@@ -117,8 +117,6 @@ const loginUser = async (req, res) => {
     // 🔒 Check if account is locked
     if (user.lockUntil && user.lockUntil > Date.now()) {
       const remainingMs = user.lockUntil - Date.now();
-
-      const remainingMinutes = Math.floor(remainingMs / 60000);
       const remainingSeconds = Math.ceil(remainingMs / 1000);
 
       return res.status(423).json({
@@ -132,13 +130,18 @@ const loginUser = async (req, res) => {
     const isMatch = await comparePassword(password, user.password);
 
     if (!isMatch) {
-      // Increase login attempts
       user.loginAttempts += 1;
 
-      // Lock after 5 failed attempts (example)
       if (user.loginAttempts >= 3) {
-        user.lockUntil = Date.now() + 5 * 60 * 1000; // 15 minutes lock
+        user.lockUntil = Date.now() + 5 * 60 * 1000;
         user.loginAttempts = 0;
+        await user.save();
+
+        return res.status(423).json({
+          success: false,
+          message: "Account temporarily locked",
+          remainingSeconds: 5 * 60,
+        });
       }
 
       await user.save();
@@ -178,12 +181,23 @@ const loginUser = async (req, res) => {
     }
 
     // 🕒 Check password expiry (7 days rule)
+    // const sevenDays = 2 * 60 * 1000;
     const sevenDays = 7 * 24 * 60 * 60 * 1000;
-    if (Date.now() - user.passwordChangedAt > sevenDays) {
+    if (Date.now() - user.passwordChangedAt.getTime() > sevenDays) {
+      const token = jwt.sign(
+        {
+          _id: user._id,
+          role: user.role,
+          passwordExpired: true, // 🔥 important flag
+        },
+        process.env.JWT_SECURE,
+        { expiresIn: "2m" }, // short expiry
+      );
       return res.status(403).json({
         success: false,
         message: "Password expired. Please change it.",
         forcePasswordChange: true,
+        token,
       });
     }
 
@@ -345,7 +359,7 @@ const changePassword = async (req, res) => {
 
     user.password = hashed;
     user.mustChangePassword = false;
-    user.passwordChangedAt = Date.now();
+    user.passwordChangedAt = new Date();
     user.loginAttempts = 0;
     user.lockUntil = null;
 
