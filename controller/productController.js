@@ -309,9 +309,87 @@ const deleteProduct = async (req, res) => {
   }
 };
 
+const getProductsFrontend = async (req, res) => {
+  try {
+    const { brand, category, minPrice, maxPrice, isPublished } = req.query;
+
+    const filter = {};
+
+    // Published
+    if (isPublished) {
+      filter.isPublished = isPublished === "true";
+    }
+
+    // Brand filter
+    if (brand) {
+      const brandIds = Array.isArray(brand) ? brand : brand.split(",");
+
+      filter.brand = { $in: brandIds };
+    }
+
+    // Category filter
+    if (category) {
+      const categoryIds = Array.isArray(category)
+        ? category
+        : category.split(",");
+
+      filter.category = { $in: categoryIds };
+    }
+    if (minPrice || maxPrice) {
+      filter.price = {};
+
+      if (minPrice) {
+        filter.price.$gte = Number(minPrice);
+      }
+
+      if (maxPrice) {
+        filter.price.$lte = Number(maxPrice);
+      }
+    }
+    const products = await Product.find(filter)
+      .populate("brand", "name")
+      .populate("category", "name")
+      .sort({ createdAt: -1 })
+      .lean();
+
+    const formattedProducts = products.map((product) => {
+      let selectedImage = null;
+
+      if (product.images?.length) {
+        const primary = product.images.find((img) => img.isPrimary);
+
+        selectedImage = primary
+          ? { url: primary.url }
+          : { url: product.images[0].url };
+      }
+
+      return {
+        _id: product._id,
+        name: product.name,
+        slug: product.slug,
+        price: product.price,
+        discount: product.discount,
+        brand: product.brand,
+        category: product.category,
+        image: selectedImage,
+        createdAt: product.createdAt,
+      };
+    });
+
+    res.status(200).json({
+      total: formattedProducts.length,
+      products: formattedProducts,
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Server error" });
+  }
+};
+
 module.exports = {
   productDataHandler,
   getAllProducts,
   getSingleProduct,
   deleteProduct,
+  getProductsFrontend,
 };

@@ -6,6 +6,7 @@ const {
   getAllProducts,
   getSingleProduct,
   deleteProduct,
+  getProductsFrontend,
 } = require("../controller/productController.js");
 
 // Memory storage for image uploads
@@ -24,4 +25,6 @@ router.post(
 router.get("/products", getAllProducts);
 router.get("/products/:id", getSingleProduct);
 router.delete("/products/:id", requiredSignIn, deleteProduct);
+router.get("/all-products", getProductsFrontend);
+
 module.exports = router;

@@ -18,6 +18,8 @@ const categoryRoutes = require("./routers/categoryRoutes.js");
 const editorImage = require("./routers/editorImage.js");
 const successStoriesRoutes = require("./routers/successStoriesRoutes.js");
 const productRoutes = require("./routers/productRoutes.js");
+const resourceRoutes = require("./routers/resourceRoutes.js");
+const roleRoutes = require("./routers/roleRoutes.js");
 
 dotenv.config();
 
@@ -49,6 +51,8 @@ app.use(brandRoutes);
 app.use(categoryRoutes);
 app.use(editorImage);
 app.use(productRoutes);
+app.use(resourceRoutes);
+app.use(roleRoutes);
 
 app.use(successStoriesRoutes);
 
