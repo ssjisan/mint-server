@@ -246,6 +246,7 @@ const getAllProducts = async (req, res) => {
     res.status(500).json({ error: "Server error" });
   }
 };
+
 const getSingleProduct = async (req, res) => {
   try {
     const { id } = req.params;
@@ -386,10 +387,34 @@ const getProductsFrontend = async (req, res) => {
   }
 };
 
+const getSingleProductBySlug = async (req, res) => {
+  try {
+    const { slug } = req.params;
+
+    if (!slug) {
+      return res.status(400).json({ error: "Product slug is required" });
+    }
+
+    const product = await Product.findOne({ slug })
+      .populate("brand", "name")
+      .populate("category", "name");
+
+    if (!product) {
+      return res.status(404).json({ error: "Product not found" });
+    }
+
+    res.status(200).json(product);
+  } catch (error) {
+    console.error("Get single product by slug error:", error);
+    res.status(500).json({ error: "Server error" });
+  }
+};
+
 module.exports = {
   productDataHandler,
   getAllProducts,
   getSingleProduct,
   deleteProduct,
   getProductsFrontend,
+  getSingleProductBySlug,
 };
