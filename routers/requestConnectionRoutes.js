@@ -6,8 +6,15 @@ const {
   updateConnectionRequestStatus,
 } = require("../controller/requestConnectionController.js");
 const { requiredSignIn } = require("../middlewares/authMiddleware.js");
+const {
+  connectionRequestLimiter,
+} = require("../middlewares/connectionRequestLimiter.js");
 
-router.post("/connection-request", createConnectionRequest);
+router.post(
+  "/connection-request",
+  connectionRequestLimiter,
+  createConnectionRequest,
+);
 router.get("/connection-requests", requiredSignIn, getAllConnectionRequests);
 router.put(
   "/connection-request/:id/status",

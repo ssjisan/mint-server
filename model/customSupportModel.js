@@ -1,63 +1,61 @@
 const mongoose = require("mongoose");
 
-const requestConnectionSchema = new mongoose.Schema(
+const customSupportSchema = new mongoose.Schema(
   {
     name: {
       type: String,
       required: true,
       trim: true,
     },
+
     phone: {
       type: String,
       required: true,
       trim: true,
     },
+
     email: {
       type: String,
       required: true,
       trim: true,
+      lowercase: true,
     },
-    companyName: {
+
+    officeName: {
       type: String,
       trim: true,
     },
+
     address: {
       type: String,
-      required: true,
       trim: true,
     },
-    packageId: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "Package",
-      required: true,
-    },
-    packageType: {
+
+    serviceName: {
       type: String,
-      enum: ["residential", "corporate"],
-      required: true,
+      trim: true,
     },
+
+    message: {
+      type: String,
+      required: true,
+      trim: true,
+      minlength: 10, // at least some characters
+    },
+
     status: {
       type: String,
-      enum: ["pending", "connected", "cancelled", "currently not possible"],
+      enum: ["pending", "in_progress", "resolved"],
       default: "pending",
+      index: true,
     },
-    referral: {
-      type: Boolean,
-      default: false,
-    },
+
     remarks: {
       type: String,
       trim: true,
     },
   },
-  {
-    timestamps: true,
-  },
+  { timestamps: true },
 );
 
-const ConnectionRequest = mongoose.model(
-  "ConnectionRequest",
-  requestConnectionSchema,
-);
-
-module.exports = ConnectionRequest;
+module.exports = mongoose.model("CustomSupport", customSupportSchema);

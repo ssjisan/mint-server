@@ -22,6 +22,7 @@ const resourceRoutes = require("./routers/resourceRoutes.js");
 const roleRoutes = require("./routers/roleRoutes.js");
 const captchaRoutes = require("./routers/captchaRoutes.js");
 const preOrderRoutes = require("./routers/preOrderRoutes.js");
+const customeSupportRoutes = require("./routers/customeSupportRoutes.js");
 
 dotenv.config();
 
@@ -58,7 +59,7 @@ app.use(roleRoutes);
 app.use(captchaRoutes);
 app.use(successStoriesRoutes);
 app.use(preOrderRoutes);
-
+app.use(customeSupportRoutes);
 app.use("/mint-media-storage", express.static(baseStoragePath));
 // 🔗 Root route
 // Basic Route

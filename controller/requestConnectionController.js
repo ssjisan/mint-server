@@ -1,5 +1,6 @@
 const ConnectionRequest = require("../model/requestConnectionModel.js");
 const mongoose = require("mongoose");
+const { verifyCaptcha } = require("../helper/captchaStore");
 
 // CREATE: Add a new connection request
 const createConnectionRequest = async (req, res) => {
@@ -13,6 +14,9 @@ const createConnectionRequest = async (req, res) => {
       packageType,
       companyName,
       remarks,
+      referral,
+      captchaId,
+      captchaAnswer,
     } = req.body;
 
     // Basic validation
@@ -26,15 +30,21 @@ const createConnectionRequest = async (req, res) => {
         .json({ error: "Company name is required for corporate packages." });
     }
 
-    // Check unique phone/email
-    const existingPhone = await ConnectionRequest.findOne({ phone });
-    if (existingPhone) {
-      return res.status(400).json({ error: "Phone number already exists." });
+    // 2️⃣ Captcha Validation
+    if (!captchaId || !captchaAnswer) {
+      return res.status(400).json({
+        success: false,
+        message: "Captcha is required.",
+      });
     }
 
-    const existingEmail = await ConnectionRequest.findOne({ email });
-    if (existingEmail) {
-      return res.status(400).json({ error: "Email already exists." });
+    const isCaptchaValid = verifyCaptcha(captchaId, captchaAnswer);
+
+    if (!isCaptchaValid) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid or expired captcha.",
+      });
     }
 
     const newRequest = new ConnectionRequest({
@@ -46,6 +56,7 @@ const createConnectionRequest = async (req, res) => {
       packageType,
       companyName: companyName || "",
       remarks: remarks || "",
+      referral: referral ?? false,
     });
 
     const savedRequest = await newRequest.save();

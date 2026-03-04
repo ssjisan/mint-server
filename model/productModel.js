@@ -73,7 +73,7 @@ const productSchema = new mongoose.Schema(
 
     // Product Status
     isPublished: { type: Boolean, default: true },
-
+    featured: { type: Boolean, default: false, index: true },
     // Images
     images: [
       {

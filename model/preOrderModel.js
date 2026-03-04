@@ -20,6 +20,11 @@ const preOrderSchema = new mongoose.Schema(
         value: Number,
       },
     },
+    remarks: {
+      type: String,
+      trim: true,
+      default: "",
+    },
 
     customer: {
       name: { type: String, required: true, trim: true },

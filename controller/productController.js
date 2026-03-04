@@ -64,7 +64,7 @@ const productDataHandler = async (req, res) => {
     if (data.price) data.price = Number(data.price);
     if (data.isPublished) data.isPublished = data.isPublished === "true";
     if (data.showPrice) data.showPrice = data.showPrice === "true";
-
+    if (data.featured !== undefined) data.featured = data.featured === "true";
     // Parse JSON strings back to Arrays/Objects
     const parseIfString = (val) =>
       typeof val === "string" ? JSON.parse(val) : val;
@@ -182,6 +182,7 @@ const productDataHandler = async (req, res) => {
         price: data.price,
         isPublished: data.isPublished,
         showPrice: data.showPrice,
+        featured: data.featured,
         discount,
         specifications,
         descriptionHTML: updatedHTML,
@@ -200,6 +201,7 @@ const productDataHandler = async (req, res) => {
         price: data.price,
         isPublished: data.isPublished,
         showPrice: data.showPrice,
+        featured: data.featured ?? false,
         discount,
         specifications,
         descriptionHTML: updatedHTML,
@@ -410,6 +412,54 @@ const getSingleProductBySlug = async (req, res) => {
   }
 };
 
+const getFeaturedProducts = async (req, res) => {
+  try {
+    const { limit = 10 } = req.query;
+
+    const products = await Product.find({
+      featured: true,
+      isPublished: true, // Only published products
+    })
+      .populate("brand", "name")
+      .populate("category", "name")
+      .sort({ createdAt: -1 }) // newest featured first
+      .limit(Number(limit))
+      .lean();
+
+    const formattedProducts = products.map((product) => {
+      let selectedImage = null;
+
+      if (product.images?.length) {
+        const primary = product.images.find((img) => img.isPrimary);
+
+        selectedImage = primary
+          ? { url: primary.url }
+          : { url: product.images[0].url };
+      }
+
+      return {
+        _id: product._id,
+        name: product.name,
+        slug: product.slug,
+        price: product.price,
+        discount: product.discount,
+        brand: product.brand,
+        category: product.category,
+        image: selectedImage,
+        createdAt: product.createdAt,
+      };
+    });
+
+    res.status(200).json({
+      total: formattedProducts.length,
+      products: formattedProducts,
+    });
+  } catch (error) {
+    console.error("Featured fetch error:", error);
+    res.status(500).json({ error: "Server error" });
+  }
+};
+
 module.exports = {
   productDataHandler,
   getAllProducts,
@@ -417,4 +467,5 @@ module.exports = {
   deleteProduct,
   getProductsFrontend,
   getSingleProductBySlug,
+  getFeaturedProducts,
 };
