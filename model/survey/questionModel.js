@@ -1,28 +1,30 @@
 const mongoose = require("mongoose");
 
-const kpiSchema = new mongoose.Schema(
+const questionSchema = new mongoose.Schema(
   {
-    name: {
+    questionText: {
       type: String,
       required: true,
       trim: true,
     },
-    tag: {
+
+    type: {
       type: String,
+      enum: ["rating", "yes_no", "comment"],
       required: true,
-      unique: true,
-      uppercase: true,
-      trim: true,
     },
-    description: {
-      type: String,
-      trim: true,
+
+    weight: {
+      type: Number,
+      default: 1,
     },
-    categoryId: {
+
+    kpiId: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: "KPI_Category",
+      ref: "KPI",
       required: true,
     },
+
     isActive: {
       type: Boolean,
       default: true,
@@ -31,4 +33,4 @@ const kpiSchema = new mongoose.Schema(
   { timestamps: true },
 );
 
-module.exports = mongoose.model("KPI", kpiSchema);
+module.exports = mongoose.model("Question", questionSchema);

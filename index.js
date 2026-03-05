@@ -24,7 +24,9 @@ const captchaRoutes = require("./routers/captchaRoutes.js");
 const preOrderRoutes = require("./routers/preOrderRoutes.js");
 const customeSupportRoutes = require("./routers/customeSupportRoutes.js");
 const kpiCategoryRoutes = require("./routers/survey/kpiCategoryRoutes.js");
-
+const kpiRoutes = require("./routers/survey/kpiRoutes.js");
+const questionRoutes = require("./routers/survey/questionRoutes.js");
+const surveyTemplateRoutes = require("./routers/survey/surveyTemplateRoutes.js");
 dotenv.config();
 
 const baseStoragePath =
@@ -62,6 +64,10 @@ app.use(successStoriesRoutes);
 app.use(preOrderRoutes);
 app.use(customeSupportRoutes);
 app.use(kpiCategoryRoutes);
+app.use(kpiRoutes);
+app.use(questionRoutes);
+app.use(surveyTemplateRoutes);
+
 app.use("/mint-media-storage", express.static(baseStoragePath));
 // 🔗 Root route
 // Basic Route
