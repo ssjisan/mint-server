@@ -27,6 +27,7 @@ const kpiCategoryRoutes = require("./routers/survey/kpiCategoryRoutes.js");
 const kpiRoutes = require("./routers/survey/kpiRoutes.js");
 const questionRoutes = require("./routers/survey/questionRoutes.js");
 const surveyTemplateRoutes = require("./routers/survey/surveyTemplateRoutes.js");
+const surveyResponseRoutes = require("./routers/survey/surveyResponseRoutes.js");
 dotenv.config();
 
 const baseStoragePath =
@@ -67,6 +68,7 @@ app.use(kpiCategoryRoutes);
 app.use(kpiRoutes);
 app.use(questionRoutes);
 app.use(surveyTemplateRoutes);
+app.use(surveyResponseRoutes);
 
 app.use("/mint-media-storage", express.static(baseStoragePath));
 // 🔗 Root route
