@@ -56,8 +56,6 @@ const extractProductImageFilenames = (html, slug) => {
 // ===============================
 const productDataHandler = async (req, res) => {
   try {
-    console.log("FILES:", req.files);
-    console.log("BODY:", req.body);
     // 1. Convert FormData strings back to proper types
     const data = { ...req.body };
 
@@ -74,10 +72,13 @@ const productDataHandler = async (req, res) => {
     const specifications = parseIfString(data.specifications);
     const discount = parseIfString(data.discount);
     const imageMetadata = parseIfString(data.imageMetadata);
-
+    const highlights = parseIfString(data.highlights);
     const { id, name, brand, category, descriptionHTML, shortDescriptionHTML } =
       data;
-
+    const maxOrderProduct = await Product.findOne()
+      .sort({ order: -1 })
+      .select("order");
+    const nextOrder = maxOrderProduct ? maxOrderProduct.order + 1 : 1;
     // 2. Standard Validations
     if (
       !name ||
@@ -189,6 +190,7 @@ const productDataHandler = async (req, res) => {
         descriptionJSON,
         shortDescriptionHTML: updatedShortHTML,
         shortDescriptionJSON,
+        highlights,
         images: finalProductImages,
       });
     } else {
@@ -208,7 +210,9 @@ const productDataHandler = async (req, res) => {
         descriptionJSON,
         shortDescriptionHTML: updatedShortHTML,
         shortDescriptionJSON,
+        highlights,
         images: finalProductImages,
+        order: nextOrder,
       });
     }
 
@@ -233,7 +237,7 @@ const getAllProducts = async (req, res) => {
     const products = await Product.find()
       .populate("brand", "name")
       .populate("category", "name")
-      .sort({ createdAt: -1 })
+      .sort({ order: 1 })
       .skip(skip)
       .limit(limit);
 
@@ -352,7 +356,7 @@ const getProductsFrontend = async (req, res) => {
     const products = await Product.find(filter)
       .populate("brand", "name")
       .populate("category", "name")
-      .sort({ createdAt: -1 })
+      .sort({ order: 1 })
       .lean();
 
     const formattedProducts = products.map((product) => {
@@ -376,6 +380,7 @@ const getProductsFrontend = async (req, res) => {
         category: product.category,
         image: selectedImage,
         createdAt: product.createdAt,
+        highlights: product.highlights || [],
       };
     });
 
@@ -422,7 +427,7 @@ const getFeaturedProducts = async (req, res) => {
     })
       .populate("brand", "name")
       .populate("category", "name")
-      .sort({ createdAt: -1 }) // newest featured first
+      .sort({ order: 1 }) // newest featured first
       .limit(Number(limit))
       .lean();
 
@@ -447,6 +452,7 @@ const getFeaturedProducts = async (req, res) => {
         category: product.category,
         image: selectedImage,
         createdAt: product.createdAt,
+        highlights: product.highlights || [],
       };
     });
 
@@ -460,6 +466,52 @@ const getFeaturedProducts = async (req, res) => {
   }
 };
 
+const updateProductOrder = async (req, res) => {
+  try {
+    const { reorderedProducts } = req.body;
+
+    if (!Array.isArray(reorderedProducts) || reorderedProducts.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: "reorderedProducts must be a non-empty array",
+      });
+    }
+
+    const ids = reorderedProducts.map((item) =>
+      typeof item === "string" ? item : item && item._id ? item._id : null,
+    );
+
+    if (ids.some((id) => !id)) {
+      return res.status(400).json({
+        success: false,
+        message: "Each item must be either an id string or an object with _id",
+      });
+    }
+
+    const bulkOps = ids.map((id, index) => ({
+      updateOne: {
+        filter: { _id: id },
+        update: { $set: { order: index + 1 } },
+      },
+    }));
+
+    const bulkResult = await Product.bulkWrite(bulkOps);
+
+    const products = await Product.find().sort({ order: 1 });
+
+    return res.status(200).json({
+      success: true,
+      message: "Product order updated",
+      bulkResult,
+      products,
+    });
+  } catch (err) {
+    console.error("Error updating product order:", err);
+    return res
+      .status(500)
+      .json({ success: false, message: "Internal server error" });
+  }
+};
 module.exports = {
   productDataHandler,
   getAllProducts,
@@ -468,4 +520,5 @@ module.exports = {
   getProductsFrontend,
   getSingleProductBySlug,
   getFeaturedProducts,
+  updateProductOrder,
 };

@@ -154,8 +154,101 @@ const updateConnectionRequestStatus = async (req, res) => {
   }
 };
 
+const getConnectionRequestStats = async (req, res) => {
+  try {
+    const stats = await ConnectionRequest.aggregate([
+      {
+        $group: {
+          _id: "$status",
+          count: { $sum: 1 },
+        },
+      },
+    ]);
+
+    let result = {
+      total: 0,
+      pending: 0,
+      connected: 0,
+      cancelled: 0,
+      notPossible: 0,
+      percentage: {
+        pending: 0,
+        connected: 0,
+        cancelled: 0,
+        notPossible: 0,
+      },
+    };
+
+    // Convert aggregation result
+    stats.forEach((item) => {
+      const status = item._id;
+      const count = item.count;
+
+      result.total += count;
+
+      if (status === "pending") result.pending = count;
+      if (status === "connected") result.connected = count;
+      if (status === "cancelled") result.cancelled = count;
+      if (status === "currently not possible") result.notPossible = count;
+    });
+
+    // Calculate percentages
+    if (result.total > 0) {
+      result.percentage.pending = (
+        (result.pending / result.total) *
+        100
+      ).toFixed(2);
+      result.percentage.connected = (
+        (result.connected / result.total) *
+        100
+      ).toFixed(2);
+      result.percentage.cancelled = (
+        (result.cancelled / result.total) *
+        100
+      ).toFixed(2);
+      result.percentage.notPossible = (
+        (result.notPossible / result.total) *
+        100
+      ).toFixed(2);
+    }
+
+    res.status(200).json({
+      success: true,
+      data: result,
+    });
+  } catch (error) {
+    console.error("Error getting connection request stats:", error);
+    res.status(500).json({
+      success: false,
+      message: "Server error",
+    });
+  }
+};
+
+const getRecentPendingRequests = async (req, res) => {
+  try {
+    const requests = await ConnectionRequest.find({ status: "pending" })
+      .populate("packageId", "packageName price speedMbps type")
+      .sort({ createdAt: -1 })
+      .limit(5);
+
+    res.status(200).json({
+      success: true,
+      data: requests,
+    });
+  } catch (error) {
+    console.error("Error fetching recent pending requests:", error);
+    res.status(500).json({
+      success: false,
+      message: "Server error",
+    });
+  }
+};
+
 module.exports = {
   createConnectionRequest,
   getAllConnectionRequests,
   updateConnectionRequestStatus,
+  getConnectionRequestStats,
+  getRecentPendingRequests,
 };

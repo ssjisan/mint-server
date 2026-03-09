@@ -4,6 +4,8 @@ const {
   createConnectionRequest,
   getAllConnectionRequests,
   updateConnectionRequestStatus,
+  getConnectionRequestStats,
+  getRecentPendingRequests,
 } = require("../controller/requestConnectionController.js");
 const { requiredSignIn } = require("../middlewares/authMiddleware.js");
 const {
@@ -16,10 +18,12 @@ router.post(
   createConnectionRequest,
 );
 router.get("/connection-requests", requiredSignIn, getAllConnectionRequests);
+router.get("/latest-connection-requests", getRecentPendingRequests);
 router.put(
   "/connection-request/:id/status",
   requiredSignIn,
   updateConnectionRequestStatus,
 );
+router.get("/connection-status", requiredSignIn, getConnectionRequestStats);
 
 module.exports = router;

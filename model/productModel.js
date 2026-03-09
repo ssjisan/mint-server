@@ -4,7 +4,10 @@ const productSchema = new mongoose.Schema(
   {
     // Basic Info
     name: { type: String, required: true, trim: true },
-
+    order: {
+      type: Number,
+      default: 0,
+    },
     productCode: {
       type: String,
       required: true,
@@ -44,7 +47,10 @@ const productSchema = new mongoose.Schema(
       type: String,
       required: true,
     },
-
+    highlights: {
+      type: [String],
+      default: [],
+    },
     descriptionJSON: {
       type: Array,
       required: true,
