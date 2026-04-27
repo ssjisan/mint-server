@@ -1,6 +1,7 @@
 const ConnectionRequest = require("../model/requestConnectionModel.js");
 const mongoose = require("mongoose");
 const { verifyCaptcha } = require("../helper/captchaStore");
+const ReferralUser = require("../model/referralUserModel.js");
 
 // CREATE: Add a new connection request
 const createConnectionRequest = async (req, res) => {
@@ -15,9 +16,23 @@ const createConnectionRequest = async (req, res) => {
       companyName,
       remarks,
       referral,
+      referralId,
       captchaId,
       captchaAnswer,
     } = req.body;
+
+    let referralUser = null;
+
+    if (referralId) {
+      referralUser = await ReferralUser.findOne({ referralId });
+
+      if (!referralUser) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid referral link",
+        });
+      }
+    }
 
     // Basic validation
     if (!name || !phone || !email || !address || !packageId || !packageType) {
@@ -57,10 +72,15 @@ const createConnectionRequest = async (req, res) => {
       companyName: companyName || "",
       remarks: remarks || "",
       referral: referral ?? false,
+      referralId: referralUser?.referralId || null,
     });
 
     const savedRequest = await newRequest.save();
-
+    if (referralUser) {
+      await ReferralUser.findByIdAndUpdate(referralUser._id, {
+        $inc: { totalRequests: 1 },
+      });
+    }
     res.status(201).json({
       success: true,
       message: "Connection request created successfully.",
@@ -75,35 +95,84 @@ const createConnectionRequest = async (req, res) => {
 // READ: Get all connection requests with optional filters
 const getAllConnectionRequests = async (req, res) => {
   try {
-    const { status, package: pkg, startDate, endDate } = req.query;
+    const {
+      status,
+      package: pkg,
+      startDate,
+      endDate,
+      referral,
+      search,
+    } = req.query;
 
-    const query = {};
+    const match = {};
 
-    /* ---------- Status filter ---------- */
-    if (status) {
-      query.status = status;
-    }
+    /* ---------- Status ---------- */
+    if (status) match.status = status;
 
-    /* ---------- Package filter ---------- */
+    /* ---------- Referral ---------- */
+    if (referral === "true") match.referral = true;
+    if (referral === "false") match.referral = false;
+
+    /* ---------- Package ---------- */
     if (pkg && mongoose.Types.ObjectId.isValid(pkg)) {
-      query.packageId = new mongoose.Types.ObjectId(pkg);
+      match.packageId = new mongoose.Types.ObjectId(pkg);
     }
 
-    /* ---------- Date filter ---------- */
+    /* ---------- Date ---------- */
     const start = startDate ? new Date(startDate) : new Date(0);
     const end = endDate ? new Date(endDate) : new Date();
 
-    query.createdAt = {
-      $gte: start,
-      $lte: end,
-    };
+    match.createdAt = { $gte: start, $lte: end };
 
-    /* ---------- Fetch ---------- */
-    const requests = await ConnectionRequest.find(query)
-      .populate("packageId", "packageName price speedMbps type")
-      .sort({ createdAt: -1 });
+    /* ---------- Search ---------- */
+    if (search) {
+      const regex = new RegExp(search, "i");
 
-    /* ---------- Return array (frontend friendly) ---------- */
+      match.$or = [
+        { name: regex },
+        { phone: regex },
+        { email: regex },
+        { companyName: regex },
+        { referralId: regex },
+      ];
+    }
+
+    const requests = await ConnectionRequest.aggregate([
+      { $match: match },
+
+      /* join packages */
+      {
+        $lookup: {
+          from: "packages",
+          localField: "packageId",
+          foreignField: "_id",
+          as: "packageId",
+        },
+      },
+      { $unwind: { path: "$packageId", preserveNullAndEmptyArrays: true } },
+
+      /* 🔥 join referral user */
+      {
+        $lookup: {
+          from: "referralusers",
+          localField: "referralId",
+          foreignField: "referralId",
+          as: "referralUser",
+        },
+      },
+      { $unwind: { path: "$referralUser", preserveNullAndEmptyArrays: true } },
+
+      /* final shape */
+      {
+        $addFields: {
+          referralName: "$referralUser.name",
+          referralPhone: "$referralUser.phone",
+        },
+      },
+
+      { $sort: { createdAt: -1 } },
+    ]);
+
     res.status(200).json(requests);
   } catch (error) {
     console.error("Error fetching connection requests:", error);
@@ -126,24 +195,43 @@ const updateConnectionRequestStatus = async (req, res) => {
       "cancelled",
       "currently not possible",
     ];
+
     if (!allowedStatus.includes(status)) {
       return res.status(400).json({ error: "Invalid status value." });
     }
 
-    const updatedRequest = await ConnectionRequest.findByIdAndUpdate(
-      id,
-      { status, remarks: remarks || "" },
-      { new: true },
-    );
+    // 🔍 get existing request FIRST
+    const existingRequest = await ConnectionRequest.findById(id);
 
-    if (!updatedRequest) {
+    if (!existingRequest) {
       return res.status(404).json({ error: "Connection request not found." });
+    }
+
+    const alreadyConnected = existingRequest.status === "connected";
+
+    // ✅ update request
+    existingRequest.status = status;
+    existingRequest.remarks = remarks || "";
+    await existingRequest.save();
+
+    // 🔥 referral success increment
+    if (
+      status === "connected" &&
+      !alreadyConnected &&
+      existingRequest.referralId
+    ) {
+      await ReferralUser.findOneAndUpdate(
+        { referralId: existingRequest.referralId },
+        {
+          $inc: { successfulConnections: 1 },
+        },
+      );
     }
 
     res.status(200).json({
       success: true,
       message: "Connection request updated successfully.",
-      data: updatedRequest,
+      data: existingRequest,
     });
   } catch (error) {
     console.error("Error updating connection request status:", error);

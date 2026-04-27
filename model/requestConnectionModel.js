@@ -45,6 +45,10 @@ const requestConnectionSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
+    referralId: {
+      type: String,
+      required: false,
+    },
     remarks: {
       type: String,
       trim: true,
